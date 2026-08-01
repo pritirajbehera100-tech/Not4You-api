@@ -1,10 +1,26 @@
-// force redeploy v2
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 const app = express();
 app.use(cors());
+
+const COOKIES_PATH = '/tmp/cookies.txt';
+
+function ensureCookiesFile() {
+  if (process.env.IG_COOKIES) {
+    try {
+      fs.writeFileSync(COOKIES_PATH, process.env.IG_COOKIES);
+      return true;
+    } catch (e) {
+      console.error('Failed to write cookies file:', e.message);
+      return false;
+    }
+  }
+  return false;
+}
+ensureCookiesFile();
 
 app.get('/', (req, res) => {
   res.json({ status: true, message: 'Not4You API is running' });
@@ -12,7 +28,12 @@ app.get('/', (req, res) => {
 
 function runYtDlp(targetUrl) {
   return new Promise((resolve, reject) => {
-    const args = ['-j', '--no-warnings', '--skip-download', '--no-playlist', targetUrl];
+    const args = ['-j', '--no-warnings', '--skip-download', '--no-playlist'];
+    if (fs.existsSync(COOKIES_PATH)) {
+      args.push('--cookies', COOKIES_PATH);
+    }
+    args.push(targetUrl);
+
     const proc = spawn('yt-dlp', args);
 
     let stdout = '';
