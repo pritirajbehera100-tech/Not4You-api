@@ -87,7 +87,7 @@ app.get('/api/download', async (req, res) => {
     });
   } catch (err) {
     console.error('yt-dlp error:', err.message);
-    res.status(500).json({ status: false, message: 'Failed to fetch media. Try again.' });
+    res.status(500).json({ status: false, message: 'Failed to fetch media. Try again.', debug: err.message });
   }
 });
 
