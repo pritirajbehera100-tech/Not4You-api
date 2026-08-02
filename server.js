@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const { Readable } = require('stream');
 const { spawn } = require('child_process');
 
 const app = express();
@@ -32,6 +33,7 @@ function runYtDlp(targetUrl) {
     if (fs.existsSync(COOKIES_PATH)) {
       args.push('--cookies', COOKIES_PATH);
     }
+    args.push('-f', 'best[acodec!=none][vcodec!=none]/best');
     args.push(targetUrl);
 
     const proc = spawn('yt-dlp', args);
@@ -61,11 +63,15 @@ function runYtDlp(targetUrl) {
 }
 
 function pickMediaUrl(info) {
+  if (Array.isArray(info.formats) && info.formats.length) {
+    const combined = info.formats.filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none' && f.url);
+    if (combined.length) {
+      return combined[combined.length - 1].url;
+    }
+  }
   if (info.url) return info.url;
   if (Array.isArray(info.formats) && info.formats.length) {
-    const combined = info.formats.filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none');
-    const pool = combined.length ? combined : info.formats;
-    const best = pool[pool.length - 1];
+    const best = info.formats[info.formats.length - 1];
     return best ? best.url : null;
   }
   return null;
@@ -110,6 +116,37 @@ app.get('/api/download', async (req, res) => {
   } catch (err) {
     console.error('yt-dlp error:', err.message);
     res.status(500).json({ status: false, message: 'Failed to fetch media. Try again.', debug: err.message });
+  }
+});
+
+app.get('/api/proxy-download', async (req, res) => {
+  const url = req.query.url;
+  if (!url) {
+    return res.status(400).send('Missing url parameter');
+  }
+
+  try {
+    const upstream = await fetch(url);
+    if (!upstream.ok || !upstream.body) {
+      return res.status(502).send('Failed to fetch media');
+    }
+
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    let ext = 'mp4';
+    if (contentType.includes('image/')) {
+      ext = contentType.split('/')[1].replace('jpeg', 'jpg');
+    } else if (contentType.includes('video/')) {
+      ext = contentType.split('/')[1];
+    }
+
+    const filename = 'Not4You_' + Date.now() + '.' + ext;
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.setHeader('Content-Type', contentType);
+
+    Readable.fromWeb(upstream.body).pipe(res);
+  } catch (err) {
+    console.error('proxy-download error:', err.message);
+    res.status(500).send('Failed to download media');
   }
 });
 
