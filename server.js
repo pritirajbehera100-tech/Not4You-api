@@ -1,4 +1,3 @@
-// rebuild trigger v2
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -64,15 +63,11 @@ function runYtDlp(targetUrl) {
 }
 
 function pickMediaUrl(info) {
-  if (Array.isArray(info.formats) && info.formats.length) {
-    const combined = info.formats.filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none' && f.url);
-    if (combined.length) {
-      return combined[combined.length - 1].url;
-    }
-  }
   if (info.url) return info.url;
   if (Array.isArray(info.formats) && info.formats.length) {
-    const best = info.formats[info.formats.length - 1];
+    const combined = info.formats.filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none' && f.url);
+    const pool = combined.length ? combined : info.formats;
+    const best = pool[pool.length - 1];
     return best ? best.url : null;
   }
   return null;
